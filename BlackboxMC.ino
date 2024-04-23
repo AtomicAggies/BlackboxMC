@@ -1,5 +1,8 @@
 #include "Adafruit_BMP3XX.h"
 #include <Adafruit_GPS.h>
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
 //MACROS
 #define RX_PIN 33
 #define TX_PIN 27
@@ -35,54 +38,6 @@ unsigned long bmp_timer;
 unsigned long currentTime;
 
 
-void setup(){
-  //Serial Initializations
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println( "Initializing Black Box Boot Sequence" );
-  Serial.println();
-
-  Comm.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial.println( "UART COMM Initialized" );
-
-   //GPS
-  av_gps_state = AV_NOFIX;
-  Serial.println( "Initializing GPS" );
-  init_gps();
-  // if(GPS.fix){
-  //   String s = "STATE," + String(AV_FIX);
-  //   av_gps_state = AV_FIX;
-  //   Comm.println(s);
-  // }
-  Serial.println( "GPS Initialized" );
-  // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
-  // Comm.println(s);
-  Serial.println("setup");
-
-  sd_setup();
-  bmp_setup();
-  bmp_timer = millis();
-  
-}
-
-void loop(){
-  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
-    String s = "STATE," + String(AV_FIX);
-    av_gps_state = AV_FIX;
-    Serial.println(s);
-
-  currentTime = millis();
-  if((currentTime - bmp_timer) > 500)
-  {
-    getBMP();
-    //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
-    String s = "DATA," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
-    Serial.println(s);
-    bmp_timer = currentTime;
-  }
-
-}
-
 void init_gps(){
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
   if(!GPS.begin(GPS_BAUD_RATE)){
@@ -100,6 +55,46 @@ void init_gps(){
   delay(1000);
   // Ask for firmware version
   GPSSerial.println(PMTK_Q_RELEASE);
+}
+
+void sd_setup()
+{
+    Serial.println("BLEHHHH");
+    // SD setup
+    if (!SD.begin(CS))
+    {
+        Serial.println("Card Mount Failed");
+        return;
+    }
+    uint8_t cardType = SD.cardType();
+
+    if (cardType == CARD_NONE)
+    {
+        Serial.println("No SD card attached");
+        return;
+    }
+
+    Serial.println("BLEHHHH2");
+    Serial.print("SD Card Type: ");
+    if (cardType == CARD_MMC)
+    {
+        Serial.println("MMC");
+    }
+    else if (cardType == CARD_SD)
+    {
+        Serial.println("SDSC");
+    }
+    else if (cardType == CARD_SDHC)
+    {
+        Serial.println("SDHC");
+    }
+    else
+    {
+        Serial.println("UNKNOWN");
+    }
+
+    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    Serial.printf("SD Card Size: %lluMB\n", cardSize);
 }
 
 void bmp_setup() {
@@ -144,4 +139,52 @@ void getBMP()
   temp = (bmp.temperature);
   press = (bmp.pressure / 100.0);
   alt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
+}
+
+void setup(){
+  //Serial Initializations
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println( "Initializing Black Box Boot Sequence" );
+  Serial.println();
+
+  Comm.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
+  Serial.println( "UART COMM Initialized" );
+
+   //GPS
+  av_gps_state = AV_NOFIX;
+  Serial.println( "Initializing GPS" );
+  init_gps();
+  // if(GPS.fix){
+  //   String s = "STATE," + String(AV_FIX);
+  //   av_gps_state = AV_FIX;
+  //   Comm.println(s);
+  // }
+  Serial.println( "GPS Initialized" );
+  // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
+  // Comm.println(s);
+  Serial.println("setup");
+
+  sd_setup();
+  bmp_setup();
+  bmp_timer = millis();
+  
+}
+
+void loop(){
+  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
+    String s = "STATE," + String(AV_FIX);
+    av_gps_state = AV_FIX;
+    Serial.println(s);
+  }
+
+  currentTime = millis();
+  if((currentTime - bmp_timer) > 500)
+  {
+    getBMP();
+    //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
+    String s = "DATA," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
+    Serial.println(s);
+    bmp_timer = currentTime;
+  }
 }
