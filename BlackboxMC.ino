@@ -31,11 +31,11 @@ void setup(){
   av_gps_state = AV_NOFIX;
   Serial.println( "Initializing GPS" );
   init_gps();
-  // if(GPS.fix){
-  //   String s = "STATE," + String(AV_FIX);
-  //   av_gps_state = AV_FIX;
-  //   Comm.println(s);
-  // }
+  if(GPS.fix){
+    String s = "STATE," + String(AV_FIX);
+    av_gps_state = AV_FIX;
+    Comm.println(s);
+  }
   Serial.println( "GPS Initialized" );
   // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
   // Comm.println(s);
@@ -44,6 +44,17 @@ void setup(){
 }
 
 void loop(){
+  // read data from the GPS in the 'main loop'
+  char c = GPS.read();
+
+  // if a sentence is received, we can check the checksum, parse it...
+  if (GPS.newNMEAreceived()) {
+    // Serial.print(GPS.lastNMEA()); // newNMEAreceived() flag to false
+    GPS.lastNMEA();
+    if (!GPS.parse(GPS.lastNMEA())) //newNMEAreceived() flag to false
+      return; // we can fail to parse a sentence in which case we should just wait for another
+  }
+
   if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
     String s = "STATE," + String(AV_FIX);
     av_gps_state = AV_FIX;
