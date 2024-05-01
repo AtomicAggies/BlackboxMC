@@ -1,3 +1,7 @@
+#include <Adafruit_BNO055.h>
+#include <Adafruit_Sensor.h>
+#include <utility/imumaths.h>
+#include <Wire.h>
 #include "Adafruit_BMP3XX.h"
 #include <Adafruit_GPS.h>
 #include "FS.h"
@@ -14,8 +18,6 @@
 #define BMP_MISO 19
 #define BMP_MOSI 18
 
-
-
 //UART COMM (Talking to transmit chip)
 HardwareSerial Comm(2);
 
@@ -24,86 +26,84 @@ HardwareSerial Comm(2);
 #define GPSSerial Serial1
 Adafruit_GPS GPS(&GPSSerial);
 
-enum AvGPSState{AV_NOFIX = 14,AV_FIX = 24} av_gps_state;
+enum AvGPSState { AV_NOFIX = 14,
+                  AV_FIX = 24 } av_gps_state;
 
-//BMP Stuff
-Adafruit_BMP3XX bmp;
+//BNO
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
+float pitch;
+float yaw;
+float roll;
+
+  //BMP Stuff
+  Adafruit_BMP3XX bmp;
 float press;
 float temp;
 float alt;
 
 //timers
 unsigned long gps_send_timer = millis();
+unsigned long bno_timer;
 unsigned long bmp_timer;
 unsigned long currentTime;
 
-
-void init_gps(){
+void init_gps() {
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
-  if(!GPS.begin(GPS_BAUD_RATE)){
+  if (!GPS.begin(GPS_BAUD_RATE)) {
     Serial.println("Failed GPS begin");
     Comm.println("FAILED Avionics GPS begin");  // send to transmit code
-  }
-  else{
+  } else {
     Serial.println("Success GPS begin");
     Comm.println("SUCCESS Avionics GPS begin");
   }
 
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
-  GPS.sendCommand(PGCMD_ANTENNA); //antenna status updates
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);  // 1 Hz update rate
+  GPS.sendCommand(PGCMD_ANTENNA);             //antenna status updates
   delay(1000);
   // Ask for firmware version
   GPSSerial.println(PMTK_Q_RELEASE);
 }
 
-void sd_setup()
-{
-    Serial.println("BLEHHHH");
-    // SD setup
-    if (!SD.begin(CS))
-    {
-        Serial.println("Card Mount Failed");
-        return;
-    }
-    uint8_t cardType = SD.cardType();
+void sd_setup() {
+  Serial.println("BLEHHHH");
+  // SD setup
+  if (!SD.begin(CS)) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+  uint8_t cardType = SD.cardType();
 
-    if (cardType == CARD_NONE)
-    {
-        Serial.println("No SD card attached");
-        return;
-    }
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  }
 
-    Serial.println("BLEHHHH2");
-    Serial.print("SD Card Type: ");
-    if (cardType == CARD_MMC)
-    {
-        Serial.println("MMC");
-    }
-    else if (cardType == CARD_SD)
-    {
-        Serial.println("SDSC");
-    }
-    else if (cardType == CARD_SDHC)
-    {
-        Serial.println("SDHC");
-    }
-    else
-    {
-        Serial.println("UNKNOWN");
-    }
+  Serial.println("BLEHHHH2");
+  Serial.print("SD Card Type: ");
+  if (cardType == CARD_MMC) {
+    Serial.println("MMC");
+  } else if (cardType == CARD_SD) {
+    Serial.println("SDSC");
+  } else if (cardType == CARD_SDHC) {
+    Serial.println("SDHC");
+  } else {
+    Serial.println("UNKNOWN");
+  }
 
-    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-    Serial.printf("SD Card Size: %lluMB\n", cardSize);
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);
 }
 
 void bmp_setup() {
-  while(!Serial);
-  Serial.println("Adafruit BMP3XX Initiated");
+  while (!Serial)
+    ;
+  Serial.println("Adafruit BMP3XX Initiated \n");
 
-  if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
-    Serial.println("No BMP detected");
-    while(1);
+  if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
+    Serial.println("No BMP detected \n");
+    while (1)
+      ;
   }
 
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
@@ -112,9 +112,30 @@ void bmp_setup() {
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 }
 
+void bno_setup() {
+  while (!Serial) delay(10);
+
+  Serial.println("BNO Setup\n");
+
+  if (!bno.begin()) {
+    Serial.println("No BNO detected, check wiring!\n");
+    while (1)
+      ;
+  }
+
+  delay(50);
+
+  //Mostly for debug. Comment out if not needed. Copied from BNO example code library
+  //Additional debug functions found in BNO library example code
+  displayBNODetails();
+  //Also debug. Displays calibration values for BNO
+  displayCalStatus();
+  Serial.println("");
+}
+
 //BMP take measurements
 void bmp_test() {
-  if (! bmp.performReading()) {
+  if (!bmp.performReading()) {
     Serial.println("Failed to perform reading :(");
     return;
   }
@@ -134,57 +155,128 @@ void bmp_test() {
   delay(2000);
 }
 
-void getBMP()
-{
+void getBMP() {
   temp = (bmp.temperature);
   press = (bmp.pressure / 100.0);
   alt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
 }
 
-void setup(){
+//BNO sensor details for debug
+void displayBNODetails(void) {
+  sensor_t sensor;
+  bno.getSensor(&sensor);
+  Serial.println("------------------------------------");
+  Serial.print("Sensor:       ");
+  Serial.println(sensor.name);
+  Serial.print("Driver Ver:   ");
+  Serial.println(sensor.version);
+  Serial.print("Unique ID:    ");
+  Serial.println(sensor.sensor_id);
+  Serial.print("Max Value:    ");
+  Serial.print(sensor.max_value);
+  Serial.println(" xxx");
+  Serial.print("Min Value:    ");
+  Serial.print(sensor.min_value);
+  Serial.println(" xxx");
+  Serial.print("Resolution:   ");
+  Serial.print(sensor.resolution);
+  Serial.println(" xxx");
+  Serial.println("------------------------------------");
+  Serial.println("");
+  delay(500);
+}
+
+void displayCalStatus(void) {
+  /* Get the four calibration values (0..3) */
+  /* Any sensor data reporting 0 should be ignored, */
+  /* 3 means 'fully calibrated" */
+  uint8_t system, gyro, accel, mag;
+  system = gyro = accel = mag = 0;
+  bno.getCalibration(&system, &gyro, &accel, &mag);
+
+  /* The data should be ignored until the system calibration is > 0 */
+  Serial.print("\t");
+  if (!system) {
+    Serial.print("! ");
+  }
+
+  /* Display the individual values */
+  Serial.print("System:");
+  Serial.print(system, DEC);
+  Serial.print(" Gyroscope:");
+  Serial.print(gyro, DEC);
+  Serial.print(" Accelerometer:");
+  Serial.print(accel, DEC);
+  Serial.print(" Magnetometer:");
+  Serial.print(mag, DEC);
+}
+
+void getBNO() {
+  sensors_event_t event;
+  bno.getEvent(&event);
+  pitch = event.orientation.y;
+  yaw = event.orientation.x;
+  roll = event.orientation.z;
+  //Assuming breadboard orientation (BNO above ESP)
+  // X = Yaw, Y = Pitch, Z = Roll
+}
+
+
+// End functions
+
+
+void setup() {
   //Serial Initializations
   Serial.begin(115200);
   delay(1000);
-  Serial.println( "Initializing Black Box Boot Sequence" );
+  Serial.println("Initializing Black Box Boot Sequence");
   Serial.println();
 
   Comm.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial.println( "UART COMM Initialized" );
+  Serial.println("UART COMM Initialized");
 
-   //GPS
+  //GPS
   av_gps_state = AV_NOFIX;
-  Serial.println( "Initializing GPS" );
+  Serial.println("Initializing GPS");
   init_gps();
   // if(GPS.fix){
   //   String s = "STATE," + String(AV_FIX);
   //   av_gps_state = AV_FIX;
   //   Comm.println(s);
   // }
-  Serial.println( "GPS Initialized" );
+  Serial.println("GPS Initialized");
   // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
   // Comm.println(s);
   Serial.println("setup");
 
   sd_setup();
-  bmp_setup();
-  bmp_timer = millis();
-  
+  //bmp_setup();
+  bno_setup();
+  bno_timer = millis();
+  //bmp_timer = millis();
 }
 
-void loop(){
-  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
+void loop() {
+  if (GPS.fix && av_gps_state == AV_NOFIX && (millis() - gps_send_timer > 500)) {
     String s = "STATE," + String(AV_FIX);
     av_gps_state = AV_FIX;
     Serial.println(s);
   }
 
   currentTime = millis();
-  if((currentTime - bmp_timer) > 500)
-  {
+
+  /*if ((currentTime - bmp_timer) > 500) {
     getBMP();
     //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
     String s = "DATA," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
-    Serial.println(s);
+    Serial.println(s); Serial.println("");
     bmp_timer = currentTime;
+  }*/
+
+  if ((currentTime - bno_timer) > 500) {
+    getBNO();
+    String st = "DATA," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
+    Serial.println(st); Serial.println("");
+    bno_timer = currentTime;
   }
 }
