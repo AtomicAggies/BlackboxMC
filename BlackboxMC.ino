@@ -67,7 +67,7 @@ void init_gps() {
 }
 
 void sd_setup() {
-  Serial.println("BLEHHHH");
+  Serial.println("Sensor Setup");
   // SD setup
   if (!SD.begin(CS)) {
     Serial.println("Card Mount Failed");
@@ -80,7 +80,7 @@ void sd_setup() {
     return;
   }
 
-  Serial.println("BLEHHHH2");
+  if(DEBUG)Serial.println("BLEHHHH2");
   Serial.print("SD Card Type: ");
   if (cardType == CARD_MMC) {
     Serial.println("MMC");
@@ -98,7 +98,6 @@ void sd_setup() {
 
 void bmp_setup() {
   while (!Serial);
-  Serial.println("Adafruit BMP3XX Initiated \n");
 
   if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
     Serial.println("No BMP detected \n");
@@ -109,12 +108,14 @@ void bmp_setup() {
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+
+  Serial.println("Adafruit BMP3XX Initiated \n");
 }
 
 void bno_setup() {
   while (!Serial) delay(10);
 
-  Serial.println("BNO Setup\n");
+  Serial.println("BNO Setup beginning\n");
 
   if (!bno.begin()) {
     Serial.println("No BNO detected, check wiring!\n");
@@ -129,6 +130,7 @@ void bno_setup() {
     displayCalStatus();
     Serial.println("");
   }
+  Serial.println("BNO Initiated \n");
 }
 
 //BMP take measurements
@@ -243,15 +245,14 @@ void setup() {
     Comm.println(s);
   }
   Serial.println("GPS Initialized");
-  // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
-  // Comm.println(s);
-  Serial.println("setup");
 
   sd_setup();
-  //bmp_setup();
+  bmp_setup();
   bno_setup();
   bno_timer = millis();
-  //bmp_timer = millis();
+  bmp_timer = millis();
+
+  Serial.println("Setup Fully Completed");
 }
 
 void loop(){
@@ -285,13 +286,13 @@ void loop(){
   }
   
 
-  /*if ((currentTime - bmp_timer) > 500) {
+  if ((currentTime - bmp_timer) > 500) {
     getBMP();
     //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
     String s = "DATA," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
     Serial.println(s); Serial.println("");
     bmp_timer = currentTime;
-  }*/
+  }
 
   if ((currentTime - bno_timer) > 500) {
     getBNO();
