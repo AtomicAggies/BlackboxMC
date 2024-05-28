@@ -16,6 +16,7 @@ enum AvGPSState{AV_NOFIX = 14,AV_FIX = 24} av_gps_state;
 
 //timers
 unsigned long gps_send_timer = millis();
+unsigned long gps_data_timer = millis();
 
 void setup(){
   //Serial Initializations
@@ -59,8 +60,18 @@ void loop(){
     String s = "STATE," + String(AV_FIX);
     av_gps_state = AV_FIX;
     Comm.println(s);
+    gps_send_timer = millis();
   }
 
+  if(GPS.fix && (millis()-gps_data_timer > 1000)){
+    String gps_longitude = "";
+    String gps_data = gps_longitude + String(GPS.longitude,4) + GPS.lon + " " + String(GPS.latitude,4) + GPS.lat;
+    Serial.println(gps_data);
+    Comm.println(gps_data); 
+    
+    gps_data_timer = millis();
+  }
+  
 }
 
 void init_gps(){
