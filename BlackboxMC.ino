@@ -17,6 +17,7 @@
 #define BMP_SCK 5
 #define BMP_MISO 19
 #define BMP_MOSI 18
+#define DEBUG true
 
 //UART COMM (Talking to transmit chip)
 HardwareSerial Comm(2);
@@ -96,14 +97,12 @@ void sd_setup() {
 }
 
 void bmp_setup() {
-  while (!Serial)
-    ;
+  while (!Serial);
   Serial.println("Adafruit BMP3XX Initiated \n");
 
   if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
     Serial.println("No BMP detected \n");
-    while (1)
-      ;
+    while (1);
   }
 
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
@@ -119,18 +118,17 @@ void bno_setup() {
 
   if (!bno.begin()) {
     Serial.println("No BNO detected, check wiring!\n");
-    while (1)
-      ;
+    while (1);
   }
 
   delay(50);
 
-  //Mostly for debug. Comment out if not needed. Copied from BNO example code library
-  //Additional debug functions found in BNO library example code
-  displayBNODetails();
-  //Also debug. Displays calibration values for BNO
-  displayCalStatus();
-  Serial.println("");
+  //Displays details and calibration values for BNO
+  if(DEBUG){
+    displayBNODetails();
+    displayCalStatus();
+    Serial.println("");
+  }
 }
 
 //BMP take measurements
@@ -257,8 +255,6 @@ void setup() {
 }
 
 void loop(){
-  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
-void loop(){
   // read data from the GPS in the 'main loop'
   char c = GPS.read();
 
@@ -279,13 +275,13 @@ void loop(){
   }
 
   currentTime = millis();
-  if(GPS.fix && (millis()-gps_data_timer > 1000)){
+  if(GPS.fix && (millis()-gps_send_timer > 1000)){
     String gps_longitude = "";
     String gps_data = gps_longitude + String(GPS.longitude,4) + GPS.lon + " " + String(GPS.latitude,4) + GPS.lat;
     Serial.println(gps_data);
     Comm.println(gps_data); 
     
-    gps_data_timer = millis();
+    gps_send_timer = millis();
   }
   
 
