@@ -43,9 +43,13 @@ float alt;
 
 //timers
 unsigned long gps_send_timer = millis();
+<<<<<<< HEAD
+unsigned long gps_data_timer = millis();
+=======
 unsigned long bno_timer;
 unsigned long bmp_timer;
 unsigned long currentTime;
+>>>>>>> sensors
 
 void init_gps() {
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
@@ -239,12 +243,21 @@ void setup() {
   av_gps_state = AV_NOFIX;
   Serial.println("Initializing GPS");
   init_gps();
+<<<<<<< HEAD
   if(GPS.fix){
     String s = "STATE," + String(AV_FIX);
     av_gps_state = AV_FIX;
     Comm.println(s);
   }
+  Serial.println( "GPS Initialized" );
+=======
+  // if(GPS.fix){
+  //   String s = "STATE," + String(AV_FIX);
+  //   av_gps_state = AV_FIX;
+  //   Comm.println(s);
+  // }
   Serial.println("GPS Initialized");
+>>>>>>> sensors
   // String s = "STATE," + String(AV_FIX); //FIXME Remove line, and test if state is getting sent
   // Comm.println(s);
   Serial.println("setup");
@@ -256,8 +269,7 @@ void setup() {
   //bmp_timer = millis();
 }
 
-void loop(){
-  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
+<<<<<<< HEAD
 void loop(){
   // read data from the GPS in the 'main loop'
   char c = GPS.read();
@@ -273,12 +285,10 @@ void loop(){
   if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
     String s = "STATE," + String(AV_FIX);
     av_gps_state = AV_FIX;
-    Serial.println(s);
     Comm.println(s);
     gps_send_timer = millis();
   }
 
-  currentTime = millis();
   if(GPS.fix && (millis()-gps_data_timer > 1000)){
     String gps_longitude = "";
     String gps_data = gps_longitude + String(GPS.longitude,4) + GPS.lon + " " + String(GPS.latitude,4) + GPS.lat;
@@ -288,6 +298,34 @@ void loop(){
     gps_data_timer = millis();
   }
   
+}
+
+void init_gps(){
+  // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
+  if(!GPS.begin(GPS_BAUD_RATE)){
+    Serial.println("Failed GPS begin");
+    Comm.println("FAILED Avionics GPS begin");  // send to transmit code
+  }
+  else{
+    Serial.println("Success GPS begin");
+    Comm.println("SUCCESS Avionics GPS begin");
+  }
+
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
+  GPS.sendCommand(PGCMD_ANTENNA); //antenna status updates
+  delay(1000);
+  // Ask for firmware version
+  GPSSerial.println(PMTK_Q_RELEASE);
+=======
+void loop() {
+  if (GPS.fix && av_gps_state == AV_NOFIX && (millis() - gps_send_timer > 500)) {
+    String s = "STATE," + String(AV_FIX);
+    av_gps_state = AV_FIX;
+    Serial.println(s);
+  }
+
+  currentTime = millis();
 
   /*if ((currentTime - bmp_timer) > 500) {
     getBMP();
@@ -303,4 +341,5 @@ void loop(){
     Serial.println(st); Serial.println("");
     bno_timer = currentTime;
   }
+>>>>>>> sensors
 }
