@@ -289,15 +289,17 @@ void loop(){
   if ((currentTime - bmp_timer) > 500) {
     getBMP();
     //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
-    String s = "DATA," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
-    Serial.println(s); Serial.println("");
+    String s = "DATA,BMP," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
+    if(DEBUG){Serial.println(s); Serial.println("");}
+    Comm.println(s);
     bmp_timer = currentTime;
   }
 
   if ((currentTime - bno_timer) > 500) {
     getBNO();
-    String st = "DATA," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
-    Serial.println(st); Serial.println("");
+    String st = "DATA,BNO," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
+    if(DEBUG){Serial.println(st); Serial.println("");}
+    Comm.println(st);
     bno_timer = currentTime;
   }
 }
