@@ -80,7 +80,6 @@ void sd_setup() {
     return;
   }
 
-  if(DEBUG)Serial.println("BLEHHHH2");
   Serial.print("SD Card Type: ");
   if (cardType == CARD_MMC) {
     Serial.println("MMC");
@@ -97,7 +96,7 @@ void sd_setup() {
 }
 
 void bmp_setup() {
-  while (!Serial);
+  while (!Serial) delay(10);
 
   if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
     Serial.println("No BMP detected \n");
@@ -230,10 +229,10 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("Initializing Black Box Boot Sequence");
-  Serial.println();
+  Serial.println("____________________________________");
 
   Comm.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial.println("UART COMM Initialized");
+  Serial.println("UART COMM (communication line with transmit MC) Initialized");
 
   //GPS
   av_gps_state = AV_NOFIX;
@@ -289,7 +288,7 @@ void loop(){
   if ((currentTime - bmp_timer) > 500) {
     getBMP();
     //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
-    String s = "DATA,BMP," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
+    String s = "BMP," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
     if(DEBUG){Serial.println(s); Serial.println("");}
     Comm.println(s);
     bmp_timer = currentTime;
@@ -297,7 +296,7 @@ void loop(){
 
   if ((currentTime - bno_timer) > 500) {
     getBNO();
-    String st = "DATA,BNO," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
+    String st = "BNO," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
     if(DEBUG){Serial.println(st); Serial.println("");}
     Comm.println(st);
     bno_timer = currentTime;
