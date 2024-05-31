@@ -11,7 +11,7 @@
 #define RX_PIN 33
 #define TX_PIN 27
 #define GPS_BAUD_RATE 9600
-#define SEALEVELPRESSURE_HPA (1016)
+#define SEALEVELPRESSURE_HPA (1013)
 #define CS 32
 #define BMP_CS 14
 #define BMP_SCK 5
@@ -38,9 +38,9 @@ float roll;
 
   //BMP Stuff
   Adafruit_BMP3XX bmp;
-float press;
-float temp;
-float alt;
+double press;
+double temp;
+double alt;
 
 //timers
 unsigned long gps_send_timer = millis();
@@ -66,7 +66,10 @@ void init_gps() {
   GPSSerial.println(PMTK_Q_RELEASE);
 }
 
-void sd_setup() {
+//
+// SD FUNCS
+//
+void sd_setup() { // FIXME RETURN the SD object to be used
   Serial.println("Sensor Setup");
   // SD setup
   if (!SD.begin(CS)) {
@@ -93,9 +96,56 @@ void sd_setup() {
 
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("SD Card Size: %lluMB\n", cardSize);
+  Serial.println("SD setup complete");
+  Comm.println("SD setup complete");
+}
+void writeFile(fs::FS &fs, const char * path, const char * message){
+  Comm.printf("Writing file: %s\n", path);
+  Serial.printf("Writing file: %s\n", path);
+  
+  File file = fs.open(path, FILE_WRITE);
+  if(!file){
+    Comm.println("Failed to open file for writing");
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+  if(file.print(message)){
+    Comm.println("File written");
+    Serial.println("File written");
+  } else {
+    Comm.println("Write failed");
+    Serial.println("Write failed");
+  }
+  file.close();   
+  delay(50);  // ensures file closes               
 }
 
-void bmp_setup() {
+void appendFile(fs::FS &fs, const char * path, const char * message){
+  if(DEBUG)Comm.printf("Appending to file: %s\n", path);
+  if(DEBUG)Serial.printf("Appending to file: %s\n", path);
+  
+  File file = fs.open(path, FILE_APPEND);
+  if(!file){
+     Comm.println("Failed to open file for appending");
+     Serial.println("Failed to open file for appending");
+     return;
+  }
+  if(file.print(message)){
+     if(DEBUG)Comm.println("Message appended");
+     if(DEBUG)Serial.println("Message appended");
+  } else {
+     Comm.println("Append failed");
+     Serial.println("Append failed");
+  }
+  file.close();
+  delay(50); // ensures file closes
+}
+// end SD FUNCS
+
+//
+// Sensor Functions
+//
+void bmp_setup() { 
   while (!Serial) delay(10);
 
   if (!bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {
@@ -220,10 +270,9 @@ void getBNO() {
   // X = Yaw, Y = Pitch, Z = Roll
 }
 
+// End Sensor functions
 
-// End functions
-
-
+// arduino setup hook
 void setup() {
   //Serial Initializations
   Serial.begin(115200);
@@ -245,15 +294,36 @@ void setup() {
   }
   Serial.println("GPS Initialized");
 
-  sd_setup();
+  // sd_setup(); //FIXME // fix function before uncommenting
   bmp_setup();
   bno_setup();
   bno_timer = millis();
   bmp_timer = millis();
 
+    if(!SD.begin(CS)){
+        Comm.println("Card Mount Failed");
+        Serial.println("Card Mount Failed");
+        return;
+    }
+    uint8_t cardType = SD.cardType();
+
+    if(cardType == CARD_NONE){
+        Comm.println("No SD card attached");
+        Serial.println("No SD card attached");
+        return;
+    }
+
+    writeFile(SD, "/datalog.csv", "Dawson,is,the,goat\n"); //test file
+    appendFile(SD, "/datalog.csv", "the,greatest,of,all,time\n");
+
+    writeFile(SD,"/GPS.csv","GPS,Hour:Min:Sec,Latitude,Longitude,Speed,Altitude,Geoid Height,ENDDATA\n");
+    writeFile(SD,"/BMP.csv","BMP,Temperature,Pressure,Altitude,ENDDATA\n");
+    writeFile(SD,"/BNO.csv","BNO,Pitch,Roll,Yaw,ENDDATA\n");
+
   Serial.println("Setup Fully Completed");
 }
 
+// arduino loop hook
 void loop(){
   // read data from the GPS in the 'main loop'
   char c = GPS.read();
@@ -276,29 +346,39 @@ void loop(){
 
   currentTime = millis();
   if(GPS.fix && (millis()-gps_send_timer > 1000)){
-    String gps_longitude = "";
-    String gps_data = gps_longitude + String(GPS.longitude,4) + GPS.lon + " " + String(GPS.latitude,4) + GPS.lat;
+    String gps_ = "GPS,";
+    String gps_data = gps_ + 
+                      String(GPS.hour) + ":" + String(GPS.minute) + ":" + String(GPS.seconds) + "," + 
+                      String(GPS.latitude,4) + GPS.lat + "," + 
+                      String(GPS.longitude,4) + GPS.lon +  "," + 
+                      String(GPS.speed) + "knots," + 
+                      String(GPS.altitude) + "meters," + 
+                      String(GPS.geoidheight) + "meters," + 
+                      "ENDDATA\n";
     Serial.println(gps_data);
     Comm.println(gps_data); 
+    appendFile(SD,"/GPS.csv",gps_data.c_str());
     
     gps_send_timer = millis();
   }
   
 
-  if ((currentTime - bmp_timer) > 500) {
+  if ((currentTime - bmp_timer) > 1000) {
     getBMP();
-    //String s = "DATA," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
-    String s = "BMP," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA";
+    //String s = "BMP," + "Temperature," + "Pressure," + "Altitude," + "ENDDATA";
+    String s = "BMP," + String(temp) + "," + String(press) + "," + String(alt) + ",ENDDATA\n";
     if(DEBUG){Serial.println(s); Serial.println("");}
-    Comm.println(s);
+    Comm.println(s); //send to transmitMC
+    appendFile(SD, "/BMP.csv", s.c_str()); // log bmp data to sd card
     bmp_timer = currentTime;
   }
 
-  if ((currentTime - bno_timer) > 500) {
+  if ((currentTime - bno_timer) > 1000) {
     getBNO();
-    String st = "BNO," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA";
+    String st = "BNO," + String(pitch) + "," + String(roll) + "," + String(yaw) + ",ENDDATA\n";
     if(DEBUG){Serial.println(st); Serial.println("");}
-    Comm.println(st);
+    Comm.println(st); //send to transmitMC
+    appendFile(SD, "/BNO.csv", st.c_str()); // log bno data to sd card
     bno_timer = currentTime;
   }
 }
