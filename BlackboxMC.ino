@@ -22,6 +22,8 @@
 //UART COMM (Talking to transmit chip)
 HardwareSerial Comm(2);
 
+String comm_msg;  //incoming transmitMC msgs
+
 //GPS
 #define GPSECHO false
 #define GPSSerial Serial1
@@ -294,13 +296,13 @@ void setup() {
   }
   Serial.println("GPS Initialized");
 
-  // sd_setup(); //FIXME // fix function before uncommenting
+  // sd_setup(); //FIXME // fix function before uncommenting //probably have to return a reference to SD
   bmp_setup();
   bno_setup();
   bno_timer = millis();
   bmp_timer = millis();
 
-    if(!SD.begin(CS)){
+    if(!SD.begin(CS)){ // doing sd setup here rather than in the function
         Comm.println("Card Mount Failed");
         Serial.println("Card Mount Failed");
         return;
@@ -336,9 +338,18 @@ void loop(){
       return; // we can fail to parse a sentence in which case we should just wait for another
   }
 
-  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 500)){
-    String s = "STATE," + String(AV_FIX);
-    av_gps_state = AV_FIX;
+  comm_msg = "";
+  if(Comm.available()>0){ //read from blackbox
+    comm_msg = Comm.readStringUntil('\n');
+    if(comm_msg.equals("AVFIX\r")){  
+      av_gps_state = AV_FIX;  // Received an ACK: Stop sending STATE,AV_FIX to Groundstation
+      delay(50);
+    }
+
+  }  
+  if(GPS.fix && av_gps_state == AV_NOFIX && (millis()-gps_send_timer > 2000)){
+    String s = "STATE," + String(AV_FIX); //sending STATE,AV_FIX to Groundstation
+    //intentionally not setting av_gps_state, waiting for an ACK
     Serial.println(s);
     Comm.println(s);
     gps_send_timer = millis();
