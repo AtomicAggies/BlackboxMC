@@ -7,6 +7,7 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+#include <SPIFFS.h>
 //MACROS
 #define RX_PIN 33
 #define TX_PIN 27
@@ -143,6 +144,47 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
   delay(50); // ensures file closes
 }
 // end SD FUNCS
+
+//
+// SPIFFS
+//
+void writeFile(const char * path, const char * message) {
+    File file = SPIFFS.open(path, FILE_APPEND);
+    if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+    if (file.print(message)) {
+        Serial.println("File written successfully");
+    } else {
+        Serial.println("Write failed");
+    }
+    file.close();
+}
+
+void logData() {
+    // Replace these variables with actual sensor readings
+    float temperature = 25.0;
+    float pressure = 1013.25;
+    float altitude = 150.0;
+
+    String dataString = "Temperature: " + String(temperature) + ", Pressure: " + String(pressure) + ", Altitude: " + String(altitude) + "\n";
+    writeFile("/datalog.txt", dataString.c_str());
+}
+
+void readFile(const char * path) {
+    File file = SPIFFS.open(path, FILE_READ);
+    if (!file) {
+        Serial.println("Failed to open file for reading");
+        return;
+    }
+    Serial.println("Reading from file:");
+    while (file.available()) {
+        Serial.write(file.read());
+    }
+    file.close();
+}
+
 
 //
 // Sensor Functions
@@ -285,6 +327,14 @@ void setup() {
   Comm.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
   Serial.println("UART COMM (communication line with transmit MC) Initialized");
 
+  //SPIFFS
+  if (!SPIFFS.begin(true)) {
+    Serial.println("An Error has occurred while mounting SPIFFS");
+  }
+  else{
+    Serial.println("SPIFFS mounted successfully");
+    // readFile("/datalog.txt");
+  }
   //GPS
   av_gps_state = AV_NOFIX;
   Serial.println("Initializing GPS");
@@ -381,6 +431,7 @@ void loop(){
     if(DEBUG){Serial.println(s); Serial.println("");}
     Comm.println(s); //send to transmitMC
     appendFile(SD, "/BMP.csv", s.c_str()); // log bmp data to sd card
+    logData(); // log bmp to ESP32 storage
     bmp_timer = currentTime;
   }
 
